@@ -137,7 +137,7 @@ async def chat(body: dict):
 
     messages = body["messages"]
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers=headers,
