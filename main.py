@@ -71,8 +71,88 @@ def get_usage():
         "messages_count": len(records)
     }
 
+WEB_SEARCH_TOOL = {
+    "type": "web_search_20250305",
+    "name": "web_search"
+}
+
 @app.post("/chat")
 async def chat(body: dict):
+    db = SessionLocal()
+
+    user_msg = Message(role="user", content=body["messages"][-1]["content"])
+    db.add(user_msg)
+    db.commit()
+
+    headers = {
+        "x-api-key": os.environ.get("ANTHROPIC_API_KEY"),
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+
+    messages = body["messages"]
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 1024,
+                "system": SYSTEM_PROMPT,
+                "tools": [WEB_SEARCH_TOOL],
+                "messages": messages
+            }
+        )
+
+        data = response.json()
+
+        if data.get("stop_reason") == "tool_use":
+            messages = messages + [{"role": "assistant", "content": data["content"]}]
+
+            tool_results = []
+            for block in data["content"]:
+                if block.get("type") == "tool_use":
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block["id"],
+                        "content": ""
+                    })
+
+            messages = messages + [{"role": "user", "content": tool_results}]
+
+            response2 = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers,
+                json={
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 1024,
+                    "system": SYSTEM_PROMPT,
+                    "tools": [WEB_SEARCH_TOOL],
+                    "messages": messages
+                }
+            )
+            data = response2.json()
+
+    reply = next(
+        (block["text"] for block in data["content"] if block.get("type") == "text"),
+        ""
+    )
+
+    assistant_msg = Message(role="assistant", content=reply)
+    db.add(assistant_msg)
+    db.commit()
+
+    usage = Usage(
+        input_tokens=data["usage"]["input_tokens"],
+        output_tokens=data["usage"]["output_tokens"],
+        cost=(data["usage"]["input_tokens"] + data["usage"]["output_tokens"]) / 1000 * 0.001
+    )
+    db.add(usage)
+    db.commit()
+    db.close()
+
+    return {"content": [{"type": "text", "text": reply}], "usage": data["usage"]}
     db = SessionLocal()
 
     # Save user message
