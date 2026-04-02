@@ -96,7 +96,7 @@ SYSTEM_PROMPT = """You are a luxury travel concierge. You help discerning travel
 
 ## Tone examples
 ✓ "I found two strong options. The Air France flight fits your budget and has the better departure time — here's why."
-✗ "Great! I'd be happy to help you find flights! Here are 8 options I found!""""
+✗ "Great! I'd be happy to help you find flights! Here are 8 options I found!"""
 
 WEB_SEARCH_TOOL = {
     "type": "web_search_20250305",
