@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -20,13 +20,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-engine = create_engine("sqlite:///conversations.db")
+db_url = os.environ.get("DATABASE_URL", "sqlite:///conversations.db").replace("postgres://", "postgresql://", 1)
+engine = create_engine(db_url)
 Base = declarative_base()
 SessionLocal = sessionmaker(bind=engine)
 
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True)
+    session_id = Column(String, index=True) 
     role = Column(String)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
@@ -40,6 +42,28 @@ class Usage(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(engine)
+
+@app.get("/sessions")
+def get_sessions():
+    db = SessionLocal()
+    sessions = db.query(
+        Message.session_id,
+        func.min(Message.created_at).label("started_at"),
+        func.min(Message.content).label("first_message")
+    ).filter(
+        Message.role == "user"
+    ).group_by(Message.session_id).order_by(
+        func.min(Message.created_at).desc()
+    ).all()
+    db.close()
+    return [
+        {
+            "session_id": s.session_id,
+            "started_at": str(s.started_at),
+            "title": s.first_message[:40] + "..." if len(s.first_message) > 40 else s.first_message
+        }
+        for s in sessions
+    ]
 
 @app.get("/")
 def home():
@@ -67,6 +91,18 @@ def get_usage():
         "remaining": round(remaining, 6),
         "messages_count": len(records)
     }
+
+@app.get("/sessions/{session_id}")
+def get_session(session_id: str):
+    db = SessionLocal()
+    messages = db.query(Message).filter(
+        Message.session_id == session_id
+    ).order_by(Message.created_at).all()
+    db.close()
+    return [
+        {"role": m.role, "content": m.content}
+        for m in messages
+    ]
 
 SYSTEM_PROMPT = """You are an eco-conscious travel advisor. You help discerning travellers plan, book, and re-book trips with precision and warmth.
 
@@ -126,6 +162,7 @@ WEB_SEARCH_TOOL = {
 @app.post("/chat")
 async def chat(body: dict):
     db = SessionLocal()
+    session_id = body.get("session_id", "default")
 
     user_msg = Message(role="user", content=body["messages"][-1]["content"])
     db.add(user_msg)
