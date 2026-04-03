@@ -1,41 +1,27 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, func
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, func, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import httpx
 import os
-from sqlalchemy import text
-with engine.connect() as conn:
-    try:
-        conn.execute(text("ALTER TABLE messages ADD COLUMN session_id VARCHAR"))
-        conn.commit()
-    except:
-        pass  # column already exists, ignore
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://ai-travel-concierge-beryl.vercel.app",
-        "https://ai-travel-concierge-dyum7l5e0.vercel.app"
-    ],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(...)  # your CORS stays here
 
+# 1. Engine first
 db_url = os.environ.get("DATABASE_URL", "sqlite:///conversations.db").replace("postgres://", "postgresql://", 1)
 engine = create_engine(db_url)
 Base = declarative_base()
 SessionLocal = sessionmaker(bind=engine)
 
+# 2. Models second
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True)
-    session_id = Column(String, index=True) 
+    session_id = Column(String, index=True)
     role = Column(String)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
@@ -48,7 +34,16 @@ class Usage(Base):
     cost = Column(Float)
     created_at = Column(DateTime, default=datetime.now)
 
+# 3. Create tables third
 Base.metadata.create_all(engine)
+
+# 4. ALTER TABLE last — engine now exists
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE messages ADD COLUMN session_id VARCHAR"))
+        conn.commit()
+    except:
+        pass
 
 @app.get("/sessions")
 def get_sessions():
@@ -182,6 +177,15 @@ async def chat(body: dict):
 
     user_msg = Message(role="user", content=body["messages"][-1]["content"])
     db.add(user_msg)
+    db.commit()
+
+
+    assistant_msg = Message(
+        session_id=session_id,  # FIXED
+        role="assistant",
+        content=reply
+    )
+    db.add(assistant_msg)
     db.commit()
 
     headers = {
