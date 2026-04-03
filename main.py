@@ -214,7 +214,7 @@ async def chat(body: dict):
                 headers=headers,
                 json={
                     "model": "claude-haiku-4-5-20251001",
-                    "max_tokens": 1024,
+                    "max_tokens": 4096,
                     "system": SYSTEM_PROMPT,
                     "tools": [WEB_SEARCH_TOOL],
                     "messages": messages
@@ -266,7 +266,7 @@ async def chat(body: dict):
                     headers=headers,
                     json={
                         "model": "claude-haiku-4-5-20251001",
-                        "max_tokens": 1024,
+                        "max_tokens": 4096,
                         "system": SYSTEM_PROMPT,
                         "tools": [WEB_SEARCH_TOOL],
                         "messages": messages
