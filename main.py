@@ -222,40 +222,45 @@ async def chat(body: dict):
             )
             data = response1.json()
 
-            # ── Tool use loop — handles real search results ─────────────────
-            # THE FIX: we loop (not just if) and pass REAL content back
+            # ── Debug: log the raw Anthropic response ───────────────────────
+            # This prints to Railway logs so we can see exactly what
+            # Anthropic sends back when a web search is triggered
+            print("=== FIRST RESPONSE stop_reason:", data.get("stop_reason"))
+            print("=== FIRST RESPONSE content types:", [b.get("type") for b in data.get("content", [])])
+
+            # ── Tool use loop ───────────────────────────────────────────────
             loop_count = 0
             while data.get("stop_reason") == "tool_use" and loop_count < 3:
                 loop_count += 1
                 used_web_search = True
 
-                # Append Claude's tool_use turn to the message history
+                # THE KEY: with web_search_20250305, Anthropic runs the search
+                # server-side and returns the results as tool_result blocks
+                # already embedded in data["content"]. We pass the whole
+                # content array back as the assistant turn — nothing to build.
                 messages = messages + [{"role": "assistant", "content": data["content"]}]
 
-                # Build tool_result blocks — pass the REAL search results back
+                # Now collect any tool_result blocks Anthropic already filled in,
+                # plus acknowledge any raw tool_use blocks that need a reply
                 tool_results = []
                 for block in data["content"]:
-                    if block.get("type") == "tool_use":
-                        # The actual search results are nested inside block["content"]
-                        # We pass them through as-is so Claude can read them
-                        result_content = block.get("content", "")
-                        if isinstance(result_content, list):
-                            # Already structured — pass through
-                            result_text = json.dumps(result_content)
-                        elif isinstance(result_content, str):
-                            result_text = result_content
-                        else:
-                            result_text = str(result_content)
-
+                    if block.get("type") == "tool_result":
+                        # Anthropic already did the search and put results here
+                        tool_results.append(block)
+                    elif block.get("type") == "tool_use":
+                        # Raw tool_use without results — acknowledge it
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block["id"],
-                            "content": result_text
+                            "content": "Search completed."
                         })
 
-                messages = messages + [{"role": "user", "content": tool_results}]
+                print("=== TOOL RESULTS BEING SENT:", len(tool_results), "blocks")
 
-                # ── Second API call with real search results ────────────────
+                if tool_results:
+                    messages = messages + [{"role": "user", "content": tool_results}]
+
+                # ── Second call — Claude reads results and writes the answer ─
                 response2 = await client.post(
                     "https://api.anthropic.com/v1/messages",
                     headers=headers,
@@ -268,6 +273,8 @@ async def chat(body: dict):
                     }
                 )
                 data = response2.json()
+                print("=== SECOND RESPONSE stop_reason:", data.get("stop_reason"))
+                print("=== SECOND RESPONSE content types:", [b.get("type") for b in data.get("content", [])])
 
             # ── Extract final text reply ────────────────────────────────────
             reply = next(
@@ -275,8 +282,9 @@ async def chat(body: dict):
                 None
             )
 
-            # If we still got nothing, give a graceful fallback
             if not reply:
+                # Log the full response so we can diagnose in Railway logs
+                print("=== NO TEXT REPLY FOUND. Full data:", json.dumps(data))
                 reply = "I wasn't able to complete that search. Could you rephrase your question and I'll try again?"
 
     except httpx.TimeoutException:
@@ -284,6 +292,7 @@ async def chat(body: dict):
         data = {"usage": {"input_tokens": 0, "output_tokens": 0}}
 
     except Exception as e:
+        print(f"=== EXCEPTION: {str(e)}")
         reply = f"Something went wrong on my end. Error: {str(e)[:100]}"
         data = {"usage": {"input_tokens": 0, "output_tokens": 0}}
 
@@ -312,5 +321,5 @@ async def chat(body: dict):
     return {
         "content": [{"type": "text", "text": reply}],
         "usage": usage_data,
-        "used_web_search": used_web_search  # 👈 front-end can use this to show a badge
+        "used_web_search": used_web_search
     }
