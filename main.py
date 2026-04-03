@@ -9,7 +9,16 @@ import os
 
 app = FastAPI()
 
-app.add_middleware(...)  # your CORS stays here
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "https://ai-travel-concierge-beryl.vercel.app",
+        "https://ai-travel-concierge-dyum7l5e0.vercel.app"
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 1. Engine first
 db_url = os.environ.get("DATABASE_URL", "sqlite:///conversations.db").replace("postgres://", "postgresql://", 1)
@@ -21,7 +30,7 @@ SessionLocal = sessionmaker(bind=engine)
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True)
-    session_id = Column(String, index=True)
+    session_id = Column(String, index=True) 
     role = Column(String)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
