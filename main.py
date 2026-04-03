@@ -6,6 +6,13 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import httpx
 import os
+from sqlalchemy import text
+with engine.connect() as conn:
+    try:
+        conn.execute(text("ALTER TABLE messages ADD COLUMN session_id VARCHAR"))
+        conn.commit()
+    except:
+        pass  # column already exists, ignore
 
 app = FastAPI()
 
