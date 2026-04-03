@@ -104,6 +104,15 @@ def get_session(session_id: str):
         for m in messages
     ]
 
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str):
+    db = SessionLocal()
+    db.query(Message).filter(Message.session_id == session_id).delete()
+    db.commit()
+    db.close()
+    return {"deleted": session_id}
+
 SYSTEM_PROMPT = """You are an eco-conscious travel advisor. You help discerning travellers plan, book, and re-book trips with precision and warmth.
 
 ## Your personality
