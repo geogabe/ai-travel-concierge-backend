@@ -184,17 +184,12 @@ async def chat(body: dict):
     db = SessionLocal()
     session_id = body.get("session_id", "default")
 
-    user_msg = Message(role="user", content=body["messages"][-1]["content"])
-    db.add(user_msg)
-    db.commit()
-
-
-    assistant_msg = Message(
-        session_id=session_id,  # FIXED
-        role="assistant",
-        content=reply
+    user_msg = Message(
+        session_id=session_id,
+        role="user",
+        content=body["messages"][-1]["content"]
     )
-    db.add(assistant_msg)
+    db.add(user_msg)
     db.commit()
 
     headers = {
@@ -252,7 +247,11 @@ async def chat(body: dict):
         ""
     )
 
-    assistant_msg = Message(role="assistant", content=reply)
+    assistant_msg = Message(
+        session_id=session_id,
+        role="assistant",
+        content=reply
+    )
     db.add(assistant_msg)
     db.commit()
 
