@@ -228,39 +228,33 @@ async def chat(body: dict):
             print("=== FIRST RESPONSE stop_reason:", data.get("stop_reason"))
             print("=== FIRST RESPONSE content types:", [b.get("type") for b in data.get("content", [])])
 
-            # ── Tool use loop ───────────────────────────────────────────────
+           # ── Tool use loop ───────────────────────────────────────────────
             loop_count = 0
             while data.get("stop_reason") == "tool_use" and loop_count < 3:
                 loop_count += 1
                 used_web_search = True
 
-                # THE KEY: with web_search_20250305, Anthropic runs the search
-                # server-side and returns the results as tool_result blocks
-                # already embedded in data["content"]. We pass the whole
-                # content array back as the assistant turn — nothing to build.
+                # Add the assistant's tool_use turn to history
                 messages = messages + [{"role": "assistant", "content": data["content"]}]
 
-                # Now collect any tool_result blocks Anthropic already filled in,
-                # plus acknowledge any raw tool_use blocks that need a reply
+                # Build tool_result replies for every tool_use block
+                # For web_search_20250305, content can just be empty string —
+                # Anthropic runs the actual search server-side on the next call
                 tool_results = []
                 for block in data["content"]:
-                    if block.get("type") == "tool_result":
-                        # Anthropic already did the search and put results here
-                        tool_results.append(block)
-                    elif block.get("type") == "tool_use":
-                        # Raw tool_use without results — acknowledge it
+                    if block.get("type") == "tool_use":
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": block["id"],
-                            "content": "Search completed."
+                            "content": ""   # ← empty is fine; Anthropic fills this in
                         })
 
-                print("=== TOOL RESULTS BEING SENT:", len(tool_results), "blocks")
+                if not tool_results:
+                    break  # Nothing to reply to — exit loop to avoid infinite spin
 
-                if tool_results:
-                    messages = messages + [{"role": "user", "content": tool_results}]
+                messages = messages + [{"role": "user", "content": tool_results}]
 
-                # ── Second call — Claude reads results and writes the answer ─
+                # Next call — Anthropic executes the search and Claude reads results
                 response2 = await client.post(
                     "https://api.anthropic.com/v1/messages",
                     headers=headers,
@@ -273,8 +267,8 @@ async def chat(body: dict):
                     }
                 )
                 data = response2.json()
-                print("=== SECOND RESPONSE stop_reason:", data.get("stop_reason"))
-                print("=== SECOND RESPONSE content types:", [b.get("type") for b in data.get("content", [])])
+                print("=== LOOP", loop_count, "stop_reason:", data.get("stop_reason"))
+                print("=== LOOP", loop_count, "content types:", [b.get("type") for b in data.get("content", [])])
 
             # ── Extract final text reply ────────────────────────────────────
             reply = next(
