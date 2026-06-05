@@ -547,6 +547,7 @@ When a user asks about getting somewhere, always call search_trains AND search_d
   you cannot access listings that require login. Instead, give the direct URL 
   and tell the user exactly what to search for.
 - Never say the tools didn't return data if they did — trust the tool output and present it directly
+- Never use markdown tables in the narrative text below an itinerary card — use plain prose or bullet points instead
 
 ## Output schemas (technical — do not mention to user)
 When transport tools have fired, prepend your response with:
@@ -567,35 +568,45 @@ When itinerary tools have fired, prepend your response with:
         "stops": [
             {
             "city": "City name",
-            "country": "Country",
+            "country": "Country name",
             "lat": 0.0,
             "lng": 0.0,
-            "dates": "Feb 1–5",
-            "nights": 4,
-            "accommodation": "Ryokan / Hotel / Gîte",
-            "highlights": ["Activity 1", "Activity 2"],
+            "dates": "Month Day–Day",
+            "nights": 0,
+            "accommodation": "Accommodation type description",
+            "accommodation_cost": 0,
+            "highlights": [
+                {"name": "Activity or place name", "category": "museum|nature|hiking|shopping|food|culture|park|beach|theme_park"}
+            ],
+            "stop_budget": 0,
             "transport_from_previous": null
             },
             {
-            "city": "Next city",
-            "country": "Country",
+            "city": "Next city name",
+            "country": "Country name",
             "lat": 0.0,
             "lng": 0.0,
-            "dates": "Feb 6–8",
-            "nights": 2,
-            "accommodation": "Accommodation type",
-            "highlights": ["Activity 1"],
+            "dates": "Month Day–Day",
+            "nights": 0,
+            "accommodation": "Accommodation type description",
+            "accommodation_cost": 0,
+            "highlights": [
+                {"name": "Activity or place name", "category": "museum|nature|hiking|shopping|food|culture|park|beach|theme_park"}
+            ],
+            "stop_budget": 0,
             "transport_from_previous": {
-                "mode": "shinkansen",
-                "icon": "🚄",
-                "duration": "1h00",
-                "cost": 120,
-                "co2": 3
+                "mode": "train|car|plane|bus|ferry",
+                "icon": "🚄|🚗|✈️|🚌|⛴",
+                "duration": "0h00",
+                "cost": 0,
+                "co2": 0
             }
             }
         ]
         }
     </itinerary>
+    The narrative after </itinerary> should be SHORT — 3-4 sentences maximum summarising the trip, 
+then bullet points for next steps. Never repeat what's already in the card. No tables ever.
 
 
 Rules:
@@ -804,8 +815,6 @@ async def chat(body: dict):
             if not reply:
                 print("=== NO TEXT REPLY. Full data:", json.dumps(data))
                 reply = "I wasn't able to get a result this time. Could you rephrase your question?"
-
-            print("=== RAW REPLY FIRST 500:", reply[:500] if reply else "NONE")
 
             import re
 
