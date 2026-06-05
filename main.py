@@ -484,6 +484,8 @@ Before composing any response about getting somewhere or planning a trip:
 4. Read the results carefully
 5. If the response involves transport options, output a <cards> JSON block before your narrative text, 
    following the transport card schema provided by the system.
+5. If the response involves a trip creation, output a <itinerary> JSON block before your narrative text, 
+   following the itinerary card schema provided by the system.
 6. Then write your response, grounded in what the tools returned
 7. Call write_memory if you think that you learned something new in the full context of your user.
     and tell them explicitely with, for example "I'll remember that you prefer gîtes"
@@ -539,15 +541,37 @@ When a user asks about getting somewhere, always call search_trains AND search_d
 
 ## Output schemas (technical — do not mention to user)
 When transport tools have fired, prepend your response with:
-<cards>{"type":"transport","origin":"...","destination":"...","passengers":5,"options":[
-  {"id":"train","mode":"train","icon":"🚆","label":"Train TGV","sublabel":"...","badge":"recommended","badgeLabel":"Recommandé","duration":"3h00","cost":275,"co2":8,"co2Max":200},
-  {"id":"car","mode":"car","icon":"🚗","label":"Voiture","sublabel":"Touran TDI","badge":"economic","badgeLabel":"Économique","duration":"5h19","cost":110,"co2":96,"co2Max":200}
-]}</cards>
+    <cards>{
+    "type":"transport",
+    "origin":"...",
+    "destination":"...",
+    "passengers":5,
+    "options":[
+    {"id":"train","mode":"train","icon":"🚆","label":"Train TGV","sublabel":"...","badge":"recommended","badgeLabel":"Recommandé","duration":"3h00","cost":275,"co2":8,"co2Max":200},
+    {"id":"car","mode":"car","icon":"🚗","label":"Voiture","sublabel":"Touran TDI","badge":"economic","badgeLabel":"Économique","duration":"5h19","cost":110,"co2":96,"co2Max":200}
+    ]}
+    </cards>
+When itinerary tools have fired, prepend your response with:
+    <itinerary>{
+        "type": "itinerary",
+        "title": "Gundam Pilgrimage — Japan 2027",
+        "stops": [
+            {
+            "title": "Trip title here",
+            "city": "City name",
+            "country": "Country",
+            "lat": 0.0,
+            "lng": 0.0,
+            }
+            ]}
+    </itinerary>
+
 
 Rules:
 - badge: "recommended" = best overall, "economic" = cheapest, null = neither
 - co2Max: set this to the highest co2 value among all options in this response
 - Only emit <cards> for transport comparisons
+- Only emit <itinerary> for trips or itineraries requests
 """
 
 # ─── Routes (unchanged from before) ───────────────────────────────────────────
@@ -761,6 +785,15 @@ async def chat(body: dict):
                 except Exception as e:
                     print(f"=== CARDS PARSE ERROR: {e}")
 
+            itinerary = None
+            if reply and '<itinerary>' in reply:
+                try:
+                    itin_json = reply.split('<itinerary>')[1].split('</itinerary>')[0].strip()
+                    itinerary = json.loads(itin_json)
+                    reply = reply.split('</itinerary>')[-1].strip()
+                except Exception as e:
+                    print(f"=== ITINERARY PARSE ERROR: {e}")
+
     except httpx.TimeoutException:
         reply = "The request timed out — try again in a moment."
         data = {"usage": {"input_tokens": 0, "output_tokens": 0}}
@@ -799,4 +832,5 @@ async def chat(body: dict):
         "used_web_search": "web_search" in tools_used,
         "tools_used": tools_used,
         "cards": cards,
+        "itinerary": itinerary,
     }
