@@ -492,10 +492,11 @@ Before composing any response about getting somewhere or planning a trip:
 4. Read the results carefully
 5. If the response involves transport options, output a <cards> JSON block before your narrative text, 
    following the transport card schema provided by the system.
-5. If the response involves a trip creation, output a <itinerary> JSON block before your narrative text, 
-   following the itinerary card schema provided by the system.
-6. Then write your response, grounded in what the tools returned
-7. Call write_memory if you think that you learned something new in the full context of your user.
+6. Whenever you present a multi-stop trip plan with specific cities and dates, 
+   you MUST output an <itinerary> JSON block BEFORE your text — no exceptions.
+   Even if the trip was discussed before, always regenerate the <itinerary> block fresh.
+7. Then write your response, grounded in what the tools returned
+8. Call write_memory if you think that you learned something new in the full context of your user.
     and tell them explicitely with, for example "I'll remember that you prefer gîtes"
 
 You have four tools available:
@@ -562,16 +563,38 @@ When transport tools have fired, prepend your response with:
 When itinerary tools have fired, prepend your response with:
     <itinerary>{
         "type": "itinerary",
-        "title": "Gundam Pilgrimage — Japan 2027",
+        "title": "Trip title",
         "stops": [
             {
-            "title": "Trip title here",
             "city": "City name",
             "country": "Country",
             "lat": 0.0,
             "lng": 0.0,
+            "dates": "Feb 1–5",
+            "nights": 4,
+            "accommodation": "Ryokan / Hotel / Gîte",
+            "highlights": ["Activity 1", "Activity 2"],
+            "transport_from_previous": null
+            },
+            {
+            "city": "Next city",
+            "country": "Country",
+            "lat": 0.0,
+            "lng": 0.0,
+            "dates": "Feb 6–8",
+            "nights": 2,
+            "accommodation": "Accommodation type",
+            "highlights": ["Activity 1"],
+            "transport_from_previous": {
+                "mode": "shinkansen",
+                "icon": "🚄",
+                "duration": "1h00",
+                "cost": 120,
+                "co2": 3
             }
-            ]}
+            }
+        ]
+        }
     </itinerary>
 
 
@@ -781,6 +804,8 @@ async def chat(body: dict):
             if not reply:
                 print("=== NO TEXT REPLY. Full data:", json.dumps(data))
                 reply = "I wasn't able to get a result this time. Could you rephrase your question?"
+
+            print("=== RAW REPLY FIRST 500:", reply[:500] if reply else "NONE")
 
             import re
 
