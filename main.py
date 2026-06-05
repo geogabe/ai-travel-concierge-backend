@@ -48,6 +48,14 @@ class Usage(Base):
     cost = Column(Float)
     created_at = Column(DateTime, default=datetime.now)
 
+class Memory(Base):
+    __tablename__ = "memory"
+    id = Column(Integer, primary_key=True)
+    category = Column(String, index=True)
+    key = Column(String)
+    value = Column(Text)
+    updated_at = Column(DateTime, default=datetime.now)
+
 Base.metadata.create_all(engine)
 
 with engine.connect() as conn:
@@ -56,9 +64,13 @@ with engine.connect() as conn:
         conn.commit()
     except:
         pass
-with engine.connect() as conn:
     try:
         conn.execute(text("ALTER TABLE messages ADD COLUMN cards TEXT"))
+        conn.commit()
+    except:
+        pass
+    try:
+        conn.execute(text("CREATE TABLE IF NOT EXISTS memory (id SERIAL PRIMARY KEY, category VARCHAR, key VARCHAR, value TEXT, updated_at TIMESTAMP)"))
         conn.commit()
     except:
         pass
@@ -148,6 +160,41 @@ TOOLS = [
                 }
             },
             "required": ["origin", "destination"]
+        }
+    },
+    {
+        "name": "read_memories",
+        "description": (
+            "Read all conversations before actually answering to the user so you always start with a full contex of what the user has already written before, where it went, their preferences, budgets, the trips they've been to, etc..."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "write_memories",
+        "description": (
+            "create new memories when there are new entries that were not already in your written memories, like new places, new destination, new trips, new preferences, updated kids ages, etc..."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "description": "destination, trip, accomodation type, transportation, family updates, budget, etc..."
+                },
+                "key": {
+                    "type": "string",
+                    "description": "city, country, car brand, kid's age, etc... "
+                },
+                "value": {
+                    "type": "string",
+                    "description": "Rome, Italy, Kia, 9, etc..."
+                }
+            },
+            "required": ["category", "key", "value"]
         }
     }
 ]
@@ -408,8 +455,21 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
         )
     elif tool_name == "web_search":
         return ""  # Anthropic runs this server-side on the next call
+                           
+    elif tool_name == "read_memories":
+        return execute_read_memories()
+
+    elif tool_name == "write_memory":
+        return execute_write_memory(
+            category=tool_input.get("category", ""),
+            key=tool_input.get("key", ""),
+            value=tool_input.get("value", "")
+        )
     else:
-        return json.dumps({"error": f"Unknown tool: {tool_name}"})
+        return json.dumps({"error": f"Unknown tool: {tool_name}"}
+        )
+   
+    
 
 
 # ─── System prompt ─────────────────────────────────────────────────────────────
@@ -418,12 +478,15 @@ SYSTEM_PROMPT = """You are an eco-conscious travel advisor for a French family. 
 
 ## How you think before answering (agentic planning)
 Before composing any response about getting somewhere or planning a trip:
-1. Decide what information you actually need (prices? carbon? driving time?)
-2. Call the relevant tools to get real data — never invent prices or journey times
-3. Read the results carefully
-4. If the response involves transport options, output a <cards> JSON block before your narrative text, 
+1. Always call read_memories first before anything else — every single conversation, no exceptions
+2. Decide what information you actually need (prices? carbon? driving time?)
+3. Call the relevant tools to get real data — never invent prices or journey times
+4. Read the results carefully
+5. If the response involves transport options, output a <cards> JSON block before your narrative text, 
    following the transport card schema provided by the system.
-5. Then write your response, grounded in what the tools returned
+6. Then write your response, grounded in what the tools returned
+7. Call write_memories if you think that you learned something new in the full context of your user.
+    and tell them explicitely with, for example "I'll remember that you prefer gîtes"
 
 You have four tools available:
 - web_search — for destination research, local accommodation, activities, recent travel tips
@@ -489,9 +552,6 @@ Rules:
 
 # ─── Routes (unchanged from before) ───────────────────────────────────────────
 
-@app.get("/")
-def home():
-    return {"message": "Ecoconcierge agent v2 — ready"}
 
 @app.get("/sessions")
 def get_sessions():
@@ -551,6 +611,32 @@ def get_usage():
         "remaining": round(remaining, 6),
         "messages_count": len(records)
     }
+
+def execute_read_memories() -> str:
+    db = SessionLocal()
+    memories = db.query(Memory).all()
+    db.close()
+    if not memories:
+        return json.dumps({"memories": [], "note": "No memories yet."})
+    return json.dumps({
+        "memories": [
+            {"category": m.category, "key": m.key, "value": m.value}
+            for m in memories
+        ]
+    }, ensure_ascii=False)
+
+def execute_write_memory(category: str, key: str, value: str) -> str:
+    db = SessionLocal()
+    existing = db.query(Memory).filter(Memory.key == key).first()
+    if existing:
+        existing.value = value
+        existing.updated_at = datetime.now()
+    else:
+        db.add(Memory(category=category, key=key, value=value))
+    db.commit()
+    db.close()
+    return json.dumps({"saved": True, "key": key, "value": value})
+
 
 # ─── Chat endpoint — agentic loop ──────────────────────────────────────────────
 
