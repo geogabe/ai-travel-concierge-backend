@@ -39,6 +39,7 @@ class Message(Base):
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
     cards = Column(Text, nullable=True)
+    itinerary = Column(Text, nullable=True)
 
 class Usage(Base):
     __tablename__ = "usage"
@@ -74,6 +75,13 @@ with engine.connect() as conn:
         conn.commit()
     except:
         pass
+    try:
+        conn.execute(text("ALTER TABLE messages ADD COLUMN itinerary TEXT"))
+        conn.commit()
+    except:
+        pass
+
+
 # ─── Tool definitions (the schema Claude sees) ─────────────────────────────────
 #
 # These tell Claude what tools exist, what they do, and what parameters to pass.
@@ -610,7 +618,8 @@ def get_session(session_id: str):
         {
             "role": m.role,
             "content": m.content,
-            "cards": json.loads(m.cards) if m.cards else None
+            "cards": json.loads(m.cards) if m.cards else None,
+            "itinerary": json.loads(m.itinerary) if m.itinerary else None
         }
         for m in messages
     ]
@@ -808,7 +817,8 @@ async def chat(body: dict):
         session_id=session_id,
         role="assistant",
         content=reply,
-        cards=json.dumps(cards) if cards else None
+        cards=json.dumps(cards) if cards else None,
+        itinerary=json.dumps(itinerary) if itinerary else None
     )
     db.add(assistant_msg)
     db.commit()
