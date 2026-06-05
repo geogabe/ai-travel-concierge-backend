@@ -174,7 +174,7 @@ TOOLS = [
         }
     },
     {
-        "name": "write_memories",
+        "name": "write_memory",
         "description": (
             "create new memories when there are new entries that were not already in your written memories, like new places, new destination, new trips, new preferences, updated kids ages, etc..."
         ),
@@ -485,7 +485,7 @@ Before composing any response about getting somewhere or planning a trip:
 5. If the response involves transport options, output a <cards> JSON block before your narrative text, 
    following the transport card schema provided by the system.
 6. Then write your response, grounded in what the tools returned
-7. Call write_memories if you think that you learned something new in the full context of your user.
+7. Call write_memory if you think that you learned something new in the full context of your user.
     and tell them explicitely with, for example "I'll remember that you prefer gîtes"
 
 You have four tools available:
