@@ -10,6 +10,7 @@ import httpx
 import os
 import json
 import math
+import asyncio
 
 app = FastAPI()
 
@@ -616,12 +617,86 @@ Rules:
 - Only emit <itinerary> for trips or itineraries requests
 """
 
-# ─── Routes (unchanged from before) ───────────────────────────────────────────
+# ─── Session model (for AI-generated titles) ───────────────────────────────────
+class Session(Base):
+    __tablename__ = "sessions"
+    session_id = Column(String, primary_key=True)
+    title      = Column(String, nullable=True)
 
+Base.metadata.create_all(bind=engine)  # safe to call multiple times — only creates missing tables
+
+
+# ─── Title generation ──────────────────────────────────────────────────────────
+def generate_title(session_id: str, first_message: str):
+    """Ask Claude for a short session title based on the first user message."""
+    import time
+    time.sleep(4)  # let the main chat call clear the rate limit window
+
+    db = SessionLocal()
+    try:
+        existing = db.query(Session).filter(Session.session_id == session_id).first()
+        if existing and existing.title:
+            return
+
+        headers = {
+            "x-api-key": os.environ.get("ANTHROPIC_API_KEY"),
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+
+        payload = {
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 30,
+            "system": (
+                "You generate short, descriptive titles for travel planning conversations. "
+                "Reply with only the title — no quotes, no punctuation at the end, no explanation. "
+                "Maximum 5 words. Examples: 'Weekend à Porto en famille', 'Train Paris–Berlin juillet', "
+                "'Vacances vélo Bretagne'."
+            ),
+            "messages": [{"role": "user", "content": first_message}]
+        }
+
+        # sync client — works correctly inside BackgroundTasks
+        with httpx.Client(timeout=10) as client:
+            r = client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers,
+                json=payload
+            )
+            data = r.json()
+            title = data["content"][0]["text"].strip()
+            print(f"[title gen] '{title}' for session {session_id[:8]}")
+
+        session_row = db.query(Session).filter(Session.session_id == session_id).first()
+        if session_row:
+            session_row.title = title
+        else:
+            db.add(Session(session_id=session_id, title=title))
+        db.commit()
+
+    except Exception as e:
+        print(f"[title gen] failed for {session_id}: {e}")
+    finally:
+        db.close()
+
+# ─── Routes (unchanged from before) ───────────────────────────────────────────
+@app.patch("/sessions/{session_id}")
+def update_session_title(session_id: str, body: dict):
+    db = SessionLocal()
+    row = db.query(Session).filter(Session.session_id == session_id).first()
+    if row:
+        row.title = body["title"]
+    else:
+        db.add(Session(session_id=session_id, title=body["title"]))
+    db.commit()
+    db.close()
+    return {"updated": session_id, "title": body["title"]}
 
 @app.get("/sessions")
 def get_sessions():
     db = SessionLocal()
+
+    # Get message stats
     sessions = db.query(
         Message.session_id,
         func.min(Message.created_at).label("started_at"),
@@ -631,16 +706,25 @@ def get_sessions():
     ).group_by(Message.session_id).order_by(
         func.min(Message.created_at).desc()
     ).all()
+
+    # Get all generated titles in one query
+    title_rows = db.query(Session).all()
+    titles = {row.session_id: row.title for row in title_rows}
+
     db.close()
+
     return [
         {
             "session_id": s.session_id,
             "started_at": str(s.started_at),
-            "title": s.first_message[:40] + "..." if len(s.first_message) > 40 else s.first_message
+            # Use AI title if available, fall back to truncated first message
+            "title": titles.get(s.session_id) or (
+                s.first_message[:40] + "..." if len(s.first_message) > 40 else s.first_message
+            )
         }
         for s in sessions
     ]
-
+ 
 @app.get("/sessions/{session_id}")
 def get_session(session_id: str):
     db = SessionLocal()
@@ -707,8 +791,10 @@ def execute_write_memory(category: str, key: str, value: str) -> str:
 
 # ─── Chat endpoint — agentic loop ──────────────────────────────────────────────
 
+from fastapi import BackgroundTasks
+
 @app.post("/chat")
-async def chat(body: dict):
+async def chat(body: dict, background_tasks: BackgroundTasks):  # add BackgroundTasks here
     db = SessionLocal()
     session_id = body.get("session_id", "default")
 
@@ -719,6 +805,10 @@ async def chat(body: dict):
     )
     db.add(user_msg)
     db.commit()
+
+    # Generate title in background on first message only
+    if len(body["messages"]) == 1:
+        background_tasks.add_task(generate_title, session_id, body["messages"][-1]["content"])
 
     headers = {
         "x-api-key": os.environ.get("ANTHROPIC_API_KEY"),
