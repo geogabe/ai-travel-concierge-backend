@@ -680,6 +680,11 @@ def generate_title(session_id: str, first_message: str):
         db.close()
 
 # ─── Routes (unchanged from before) ───────────────────────────────────────────
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.patch("/sessions/{session_id}")
 def update_session_title(session_id: str, body: dict):
     db = SessionLocal()
