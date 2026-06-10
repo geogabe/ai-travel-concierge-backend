@@ -487,8 +487,8 @@ Before composing any response about getting somewhere or planning a trip:
 2. Decide what information you actually need (prices? carbon? driving time?)
 3. Call the relevant tools to get real data — never invent prices or journey times
 4. Read the results carefully
-5. If the response involves transport options, output a <cards> JSON block before your narrative text, 
-   following the transport card schema provided by the system.
+5. Always call search_driving when suggesting any road route, even scenic or motorcycle routes.
+   Always output <itinerary> when suggesting a multi-stop route with named cities, even if not explicitly asked for a trip plan.
 6. Whenever you present a multi-stop trip plan with specific cities and dates, 
    you MUST output an <itinerary> JSON block BEFORE your text — no exceptions.
    Even if the trip was discussed before, always regenerate the <itinerary> block fresh.
