@@ -121,12 +121,10 @@ TOOLS = [
     {
         "name": "search_driving",
         "description": (
-            "description": (
-                "Calculate the driving option for any road trip — car, motorcycle, or any vehicle. "
-                "Default vehicle is the family Volkswagen Touran 2.0L TDI (2017), but use this tool "
-                "for ANY road journey including motorcycle trips, scenic routes, and road trips. "
-                "Returns estimated distance, driving time, fuel cost, and total cost."
-            ),
+            "Calculate the driving option for any road trip — car, motorcycle, or any vehicle. "
+            "Default vehicle is the family Volkswagen Touran 2.0L TDI (2017), but use this tool "
+            "for ANY road journey including motorcycle trips, scenic routes, and road trips. "
+            "Returns estimated distance, driving time, fuel cost, and total cost."
         ),
         "input_schema": {
             "type": "object",
