@@ -121,10 +121,12 @@ TOOLS = [
     {
         "name": "search_driving",
         "description": (
-            "Calculate the driving option for a trip using the family's Volkswagen Touran "
-            "2.0L TDI (2017). Returns estimated distance, driving time, fuel cost, toll cost, "
-            "and total cost. Use this whenever the user asks about driving, or when comparing "
-            "all transport options side by side."
+            "description": (
+                "Calculate the driving option for any road trip — car, motorcycle, or any vehicle. "
+                "Default vehicle is the family Volkswagen Touran 2.0L TDI (2017), but use this tool "
+                "for ANY road journey including motorcycle trips, scenic routes, and road trips. "
+                "Returns estimated distance, driving time, fuel cost, and total cost."
+            ),
         ),
         "input_schema": {
             "type": "object",
@@ -521,6 +523,7 @@ When a user asks about getting somewhere, always call search_trains AND search_d
 - Avoid: beach-only resorts, all-inclusive hotels, overtouristed spots in peak season
 - School holidays: French calendar, zone B
 - Car: Volkswagen Touran 2.0L TDI 2017 (seats 7, diesel)
+- Geoffroy also rides a motorcycle solo, a moto morini 650cm3 scrambler — for moto trips, use search_driving for distances and timing, and adapt the narrative accordingly
 
 ## Travel philosophy
 - Train over plane whenever journey is under 6–7 hours
