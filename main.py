@@ -489,13 +489,11 @@ Before composing any response about getting somewhere or planning a trip:
 4. Read the results carefully
 5. Always call search_driving when suggesting any road route, even scenic or motorcycle routes.
    Always output <itinerary> when suggesting a multi-stop route with named cities, even if not explicitly asked for a trip plan.
-6. Whenever you present ANY route, road trip, or multi-stop journey with named cities —
-   even scenic routes, motorcycle routes, or informal suggestions — you MUST:
-   - Call search_driving for each leg
-   - Call calculate_carbon for the full trip
-   - Output an <itinerary> JSON block BEFORE your text — no exceptions.
-   Even if the user hasn't explicitly asked for a trip plan, if you're suggesting
-   a route with cities and distances, treat it as an itinerary.
+6. OUTPUT RULES — NON-NEGOTIABLE:
+   - search_driving or search_trains were called → you MUST output <itinerary> FIRST, before any text.
+   - NEVER respond with prose only when transport tools have fired.
+   - The <itinerary> block must come before ANY narrative text, no exceptions.
+   - If you are tempted to write a road description in prose, stop — write the <itinerary> block first.
 7. Then write your response, grounded in what the tools returned
 8. Call write_memory if you think that you learned something new in the full context of your user.
     and tell them explicitely with, for example "I'll remember that you prefer gîtes"
@@ -549,6 +547,7 @@ When a user asks about getting somewhere, always call search_trains AND search_d
   and tell the user exactly what to search for.
 - Never say the tools didn't return data if they did — trust the tool output and present it directly
 - Never use markdown tables in the narrative text below an itinerary card — use plain prose or bullet points instead
+- Never respond in prose only when search_driving or search_trains have been called — always output the structured block first
 
 ## Output schemas (technical — do not mention to user)
 When transport tools have fired, prepend your response with:
@@ -613,8 +612,8 @@ then bullet points for next steps. Never repeat what's already in the card. No t
 Rules:
 - badge: "recommended" = best overall, "economic" = cheapest, null = neither
 - co2Max: set this to the highest co2 value among all options in this response
-- Only emit <cards> for transport comparisons
-- Only emit <itinerary> for trips or itineraries requests
+- Emit <itinerary> or <card> for any response involving a route, road trip, or multi-stop journey with named cities
+
 """
 
 # ─── Session model (for AI-generated titles) ───────────────────────────────────
